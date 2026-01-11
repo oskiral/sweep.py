@@ -3,7 +3,7 @@ Simple python script to tidy up folder.
 
 ## Usage
 
-Sorts the current folder where the script is located:
+Sort the current folder where the script is located:
 ```bash
 python sweep.py
 ```
@@ -18,9 +18,14 @@ Get help
 python sweep.py --help
 ```
 
+See what would happen without actually moving any files:
+```bash
+python sweep.py --dry-run
+```
+
 ## TODO
 - [x] Command Line Interface (CLI)
-- [ ] Dry Run Mode
+- [x] Dry Run Mode
 - [ ] Undo Feature
 - [ ] Config file
 - [ ] Progress Bar Integration
