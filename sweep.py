@@ -2,8 +2,32 @@ import os
 import shutil
 import argparse
 import fnmatch
+import json
+from datetime import datetime
 
-def get_unique_path(destination_folder, filename):
+UNDO_LOG_FILE = ".sweep_undo.log"
+FILE_EXTENSIONS = {
+        "Images" : [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"],
+        "Videos" : [".mp4", ".mkv", ".mov", ".avi"],
+        "Documents" : [".md", ".txt", ".pdf", ".docx", ".pptx", ".csv"],
+        "Archives" : [".zip", ".7z", ".rar", ".tar"],
+        "Executables": [".exe", ".msi", ".sh", ".bat"],
+        "Music": [".mp3", ".wav"]
+    }
+
+def save_undo_log(path, moves) -> None:
+    """Saves all move information to the undo log in the target directory."""
+    if not moves:
+        return
+        
+    log_path = os.path.join(path, UNDO_LOG_FILE)
+    try:
+        with open(log_path, "w", encoding="utf-8") as f:
+            json.dump(moves, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Warning: Could not save undo log: {e}")
+
+def get_unique_path(destination_folder, filename) -> str:
     """Generates a unique filename if a conflict exists."""
     base, extension = os.path.splitext(filename)
     counter = 1
@@ -16,16 +40,61 @@ def get_unique_path(destination_folder, filename):
         
     return unique_path
 
-def organize_folder(path: str, dry_run: bool = False, handle_config: bool = False, use_gitignore: bool = False) -> None:
+def undo_last_organize(path: str) -> None:
+    """Reverts the last organization based on the undo log."""
+
+    log_path = os.path.join(path, UNDO_LOG_FILE)
     
-    FILE_EXTENSIONS = {
-        "Images" : [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"],
-        "Videos" : [".mp4", ".mkv", ".mov", ".avi"],
-        "Documents" : [".md", ".txt", ".pdf", ".docx", ".pptx", ".csv"],
-        "Archives" : [".zip", ".7z", ".rar", ".tar"],
-        "Executables": [".exe", ".msi", ".sh", ".bat"],
-        "Music": [".mp3", ".wav"]
-    }
+    if not os.path.exists(log_path):
+        print("No undo log found. Nothing to revert.")
+        return
+    
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            entries = json.load(f)
+        
+        if not entries:
+            print("Undo log is empty.")
+            return
+        
+        print(f"Reverting {len(entries)} file moves...")
+        
+        for entry in reversed(entries):
+            original = entry["original"]
+            moved_to = entry["moved_to"]
+            
+            if not os.path.exists(moved_to):
+                print(f"Skipped (already missing): {moved_to}")
+                continue
+            
+            # ensure original directory exists
+            os.makedirs(os.path.dirname(original), exist_ok=True)
+            
+            # conflict resolution
+            if os.path.exists(original):
+                base, ext = os.path.splitext(original)
+                counter = 1
+                new_original = original
+                while os.path.exists(new_original):
+                    new_original = f"{base}_restored_{counter}{ext}"
+                    counter += 1
+                print(f"Name conflict - restoring as: {os.path.basename(new_original)}")
+                original = new_original
+            
+            shutil.move(moved_to, original)
+            print(f"Restored: {os.path.basename(moved_to)} → {os.path.basename(original)}")
+        
+        # after undoing all moves remove the log file
+        os.remove(log_path)
+        print("\nUndo completed. Log file removed.")
+        
+    except Exception as e:
+        print(f"Error during undo: {e}")
+
+def organize_folder(path: str, dry_run: bool = False, handle_config: bool = False, use_gitignore: bool = False) -> None:
+    """Organizes files in the specified folder into categorized subfolders."""
+
+    moves = []
 
     # change working directory
     os.chdir(path)
@@ -62,6 +131,10 @@ def organize_folder(path: str, dry_run: bool = False, handle_config: bool = Fals
                         os.makedirs("Config")
 
                     dest_path = get_unique_path("Config", file)
+                    moves.append({
+                        "original": os.path.abspath(file),
+                        "moved_to": os.path.abspath(dest_path)
+                    })
                     shutil.move(file, dest_path)
                     print(f"Moved config: {file} -> Config")
 
@@ -93,6 +166,10 @@ def organize_folder(path: str, dry_run: bool = False, handle_config: bool = Fals
                         os.makedirs(category)
                     
                     dest_path = get_unique_path(category, file)
+                    moves.append({
+                        "original": os.path.abspath(file),
+                        "moved_to": os.path.abspath(dest_path)
+                    })
                     shutil.move(file, dest_path)
 
                     # log changes
@@ -113,8 +190,15 @@ def organize_folder(path: str, dry_run: bool = False, handle_config: bool = Fals
                     os.makedirs('Others')
 
                 dest_path = get_unique_path("Others", file)
+                moves.append({
+                    "original": os.path.abspath(file),
+                    "moved_to": os.path.abspath(dest_path)
+                })
                 shutil.move(file, dest_path)
                 print(f"Moved: {file} -> Others")
+
+    if not dry_run and moves:
+        save_undo_log(path, moves)
 
 if __name__ == "__main__":
 
@@ -124,6 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true", help="Simulate the organization without making changes") # dry run option
     parser.add_argument("--config", action="store_true", help="Also organize hidden config files (dotfiles) into 'Config' folder") # handle config files option
     parser.add_argument("--gitignore", action="store_true", help="Ignore files matching patterns from .gitignore in the target directory") # use .gitignore patterns
+    parser.add_argument("--undo", action="store_true", help="Revert the last organization based on the undo log") # undo option
 
     args = parser.parse_args()
 
@@ -131,8 +216,15 @@ if __name__ == "__main__":
         print(f"Error: The path '{args.path}' does not exist.")
         exit(1)
 
-    mode_label = " (DRY RUN MODE)" if args.dry_run else ""
+    
+    os.chdir(args.path)
 
+    if args.undo:
+        print(f"--- Undoing last organization in: {os.path.abspath(args.path)} ---")
+        undo_last_organize(args.path)
+        exit(0)
+
+    mode_label = " (DRY RUN MODE)" if args.dry_run else ""
     print(f"--- Organizing: {os.path.abspath(args.path)}{mode_label} ---")
 
     organize_folder(args.path, dry_run=args.dry_run, handle_config=args.config, use_gitignore=args.gitignore)

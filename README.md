@@ -35,10 +35,15 @@ Ignore files that .gitignore contains:
 python sweep.py --gitignore path/to/directory
 ```
 
+Revert the last organization (undo file moves):
+```bash
+python sweep.py --undo path/to/directory
+```
+
 ## TODO
 - [x] Command Line Interface (CLI)
 - [x] Dry Run Mode
-- [ ] Undo Feature
+- [x] Undo Feature
 - [ ] Config file
 - [ ] Progress Bar Integration
 - [ ] Sorting by Date Option
