@@ -1,0 +1,13 @@
+{
+  "categories": {
+    "Images": [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"],
+    "Videos": [".mp4", ".mkv", ".mov", ".avi"],
+    "Documents": [".md", ".txt", ".pdf", ".docx", ".pptx", ".csv"],
+    "Archives": [".zip", ".7z", ".rar", ".tar"],
+    "Executables": [".exe", ".msi", ".sh", ".bat"],
+    "Music": [".mp3", ".wav"]
+  },
+  "settings": {
+    "undo_log_filename": ".sweep_undo.log"
+  }
+}

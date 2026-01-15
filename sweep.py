@@ -3,24 +3,45 @@ import shutil
 import argparse
 import fnmatch
 import json
-from datetime import datetime
 
-UNDO_LOG_FILE = ".sweep_undo.log"
-FILE_EXTENSIONS = {
-        "Images" : [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"],
-        "Videos" : [".mp4", ".mkv", ".mov", ".avi"],
-        "Documents" : [".md", ".txt", ".pdf", ".docx", ".pptx", ".csv"],
-        "Archives" : [".zip", ".7z", ".rar", ".tar"],
-        "Executables": [".exe", ".msi", ".sh", ".bat"],
-        "Music": [".mp3", ".wav"]
+DEFAULT_UNDO_LOG = ".sweep_undo.log"
+
+
+def load_config():
+    default_config = {
+        "categories": {
+            "Images" : [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"],
+            "Videos" : [".mp4", ".mkv", ".mov", ".avi"],
+            "Documents" : [".md", ".txt", ".pdf", ".docx", ".pptx", ".csv"],
+            "Archives" : [".zip", ".7z", ".rar", ".tar"],
+            "Executables": [".exe", ".msi", ".sh", ".bat"],
+            "Music": [".mp3", ".wav"]
+        }, "settings" : {
+            "undo_log_filename": DEFAULT_UNDO_LOG
+        }
     }
+    
+    config_path = "sweep_config.json"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                user_config = json.load(f)
 
-def save_undo_log(path, moves) -> None:
+                if "categories" in user_config:
+                    default_config["categories"] = user_config["categories"]
+                if "settings" in user_config:
+                    default_config["settings"].update(user_config["settings"])
+        except Exception as e:
+            print(f"Warning: Could not read config file, using defaults. {e}")
+            
+    return default_config
+
+def save_undo_log(path, moves, undo_log) -> None:
     """Saves all move information to the undo log in the target directory."""
     if not moves:
         return
         
-    log_path = os.path.join(path, UNDO_LOG_FILE)
+    log_path = os.path.join(path, undo_log)
     try:
         with open(log_path, "w", encoding="utf-8") as f:
             json.dump(moves, f, indent=2, ensure_ascii=False)
@@ -40,10 +61,10 @@ def get_unique_path(destination_folder, filename) -> str:
         
     return unique_path
 
-def undo_last_organize(path: str) -> None:
+def undo_last_organize(path: str, undo_log: str) -> None:
     """Reverts the last organization based on the undo log."""
 
-    log_path = os.path.join(path, UNDO_LOG_FILE)
+    log_path = os.path.join(path, undo_log)
     
     if not os.path.exists(log_path):
         print("No undo log found. Nothing to revert.")
@@ -91,10 +112,11 @@ def undo_last_organize(path: str) -> None:
     except Exception as e:
         print(f"Error during undo: {e}")
 
-def organize_folder(path: str, dry_run: bool = False, handle_config: bool = False, use_gitignore: bool = False) -> None:
+def organize_folder(path: str, categories: dict, undo_log: str, dry_run: bool = False, handle_config: bool = False, use_gitignore: bool = False) -> None:
     """Organizes files in the specified folder into categorized subfolders."""
 
     moves = []
+    
 
     # change working directory
     os.chdir(path)
@@ -152,7 +174,7 @@ def organize_folder(path: str, dry_run: bool = False, handle_config: bool = Fals
         extension = extension.lower()
 
         category_found = False
-        for category, ext_list in FILE_EXTENSIONS.items():
+        for category, ext_list in categories.items():
 
             if extension in ext_list:
 
@@ -198,13 +220,14 @@ def organize_folder(path: str, dry_run: bool = False, handle_config: bool = Fals
                 print(f"Moved: {file} -> Others")
 
     if not dry_run and moves:
-        save_undo_log(path, moves)
+        save_undo_log(".", moves, undo_log)
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Organize your files into categorized folders.")
 
-    parser.add_argument("path", nargs="?", default=".", help="Target directory path (default: current)") # path to the target directory
+    default_home = os.path.expanduser("~")
+    parser.add_argument("path", nargs="?", default=default_home, help="Target directory path (default: current)") # path to the target directory
     parser.add_argument("--dry-run", action="store_true", help="Simulate the organization without making changes") # dry run option
     parser.add_argument("--config", action="store_true", help="Also organize hidden config files (dotfiles) into 'Config' folder") # handle config files option
     parser.add_argument("--gitignore", action="store_true", help="Ignore files matching patterns from .gitignore in the target directory") # use .gitignore patterns
@@ -216,18 +239,21 @@ if __name__ == "__main__":
         print(f"Error: The path '{args.path}' does not exist.")
         exit(1)
 
+    config = load_config()
+    categories = config["categories"]
+    undo_log_name = config["settings"]["undo_log_filename"]
     
     os.chdir(args.path)
 
     if args.undo:
         print(f"--- Undoing last organization in: {os.path.abspath(args.path)} ---")
-        undo_last_organize(args.path)
+        undo_last_organize(args.path, undo_log_name)
         exit(0)
 
     mode_label = " (DRY RUN MODE)" if args.dry_run else ""
     print(f"--- Organizing: {os.path.abspath(args.path)}{mode_label} ---")
 
-    organize_folder(args.path, dry_run=args.dry_run, handle_config=args.config, use_gitignore=args.gitignore)
+    organize_folder(args.path, categories, undo_log_name, dry_run=args.dry_run, handle_config=args.config, use_gitignore=args.gitignore)
 
     if not args.dry_run:
         print("\nCompleted. Folder organized.")
