@@ -44,7 +44,7 @@ python sweep.py --undo path/to/directory
 - [x] Command Line Interface (CLI)
 - [x] Dry Run Mode
 - [x] Undo Feature
-- [ ] Config file
+- [x] Config file
 - [ ] Progress Bar Integration
 - [ ] Sorting by Date Option
 
