@@ -45,7 +45,7 @@ python sweep.py --undo path/to/directory
 - [x] Dry Run Mode
 - [x] Undo Feature
 - [x] Config file
-- [ ] Progress Bar Integration
+- [x] Progress Bar Integration
 - [ ] Sorting by Date Option
 
-### This project uses only Python standard libraries.
+### You have to install requirements.txt

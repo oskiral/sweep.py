@@ -3,6 +3,7 @@ import shutil
 import argparse
 import fnmatch
 import json
+from tqdm import tqdm
 
 DEFAULT_UNDO_LOG = ".sweep_undo.log"
 
@@ -80,7 +81,7 @@ def undo_last_organize(path: str, undo_log: str) -> None:
         
         print(f"Reverting {len(entries)} file moves...")
         
-        for entry in reversed(entries):
+        for entry in tqdm(reversed(entries), desc="Reverting moves", unit="file"):
             original = entry["original"]
             moved_to = entry["moved_to"]
             
@@ -121,6 +122,9 @@ def organize_folder(path: str, categories: dict, undo_log: str, dry_run: bool = 
     # change working directory
     os.chdir(path)
 
+    all_items = os.listdir()
+    files_to_process = [f for f in all_items if os.path.isfile(f) and f != "sweep.py"]
+
     # load patterns from .gitignore if requested
     gitignore_patterns = []
     if use_gitignore and os.path.exists(".gitignore"):
@@ -137,7 +141,7 @@ def organize_folder(path: str, categories: dict, undo_log: str, dry_run: bool = 
             return False
         return any(fnmatch.fnmatch(name, pattern) for pattern in gitignore_patterns)
 
-    for file in os.listdir():
+    for file in tqdm(files_to_process, desc="Organizing files", unit="file"):
 
         # ignore directories and script itself
         if file == "sweep.py" or os.path.isdir(file):
